@@ -25,7 +25,7 @@
             padding: 20px;
         }
 
-        .container { max-width: 1000px; margin: 0 auto; }
+        .container { max-width: 1050px; margin: 0 auto; }
 
         header {
             display: flex;
@@ -74,6 +74,7 @@
         th, td { padding: 12px; text-align: left; border-bottom: 1px solid var(--border); }
         th { background: #f1f5f9; color: var(--text-muted); }
         .balance-high { font-weight: bold; color: #d97706; }
+        .time-stamp { font-size: 12px; color: var(--text-muted); }
 
         /* Attendance List */
         .attendance-row {
@@ -117,6 +118,7 @@
                         <th>Earned</th>
                         <th>Paid Out</th>
                         <th>Unpaid Balance (Owed)</th>
+                        <th>Last Payout</th>
                     </tr>
                 </thead>
                 <tbody id="ledgerBody"></tbody>
@@ -183,7 +185,8 @@
         const rate = parseFloat(document.getElementById('addRate').value);
         if(!name || isNaN(rate) || rate <= 0) return alert("Enter valid name and rate!");
 
-        workers.push({ name, rate, ot_hours: 0, earned: 0, paid: 0, balance: 0 });
+        // Added 'last_paid' tracking field
+        workers.push({ name, rate, ot_hours: 0, earned: 0, paid: 0, balance: 0, last_paid: "Never" });
         document.getElementById('addName').value = '';
         document.getElementById('addRate').value = '';
         saveData();
@@ -197,9 +200,15 @@
 
         workers[idx].balance -= amount;
         workers[idx].paid += amount;
+        
+        // Grab the exact current date and time
+        const now = new Date();
+        const timeOptions = { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' };
+        workers[idx].last_paid = now.toLocaleString('en-IN', timeOptions);
+
         document.getElementById('payAmount').value = '';
         saveData();
-        alert(`Payout of ₹${amount} recorded for ${workers[idx].name}!`);
+        alert(`Payout of ₹${amount} recorded for ${workers[idx].name} at ${workers[idx].last_paid}!`);
     }
 
     function removeWorker() {
@@ -257,13 +266,14 @@
         removeSelect.innerHTML = '<option value="">-- Select --</option>';
 
         if(workers.length === 0) {
-            ledgerBody.innerHTML = '<tr><td colspan="6" style="text-align:center;">No workers added yet.</td></tr>';
+            ledgerBody.innerHTML = '<tr><td colspan="7" style="text-align:center;">No workers added yet.</td></tr>';
             attList.innerHTML = '<div style="padding:15px; text-align:center;">No crew members available.</div>';
             return;
         }
 
         workers.forEach((w, i) => {
-            // Render Ledger
+            // Render Ledger with the new Last Payout column
+            const lastPaidDisplay = w.last_paid || "Never";
             ledgerBody.innerHTML += `
                 <tr>
                     <td><strong>${w.name}</strong></td>
@@ -272,6 +282,7 @@
                     <td>₹${Math.round(w.earned)}</td>
                     <td>₹${Math.round(w.paid)}</td>
                     <td class="balance-high">₹${Math.round(w.balance)}</td>
+                    <td class="time-stamp">${lastPaidDisplay}</td>
                 </tr>`;
 
             // Render Attendance Row
@@ -294,9 +305,10 @@
     }
 
     function exportCSV() {
-        let csv = "Name,Daily Rate,OT Hours,Earned,Paid,Balance\n";
+        let csv = "Name,Daily Rate,OT Hours,Earned,Paid,Balance,Last Payout\n";
         workers.forEach(w => {
-            csv += `"${w.name}",${w.rate},${w.ot_hours},${w.earned},${w.paid},${w.balance}\n`;
+            const lastPaidExport = w.last_paid || "Never";
+            csv += `"${w.name}",${w.rate},${w.ot_hours},${w.earned},${w.paid},${w.balance},"${lastPaidExport}"\n`;
         });
         const link = document.createElement("a");
         link.href = encodeURI("data:text/csv;charset=utf-8," + csv);
