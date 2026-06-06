@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Joginder & Sons | WageTracker Pro</title>
+    <style>
+        :root {
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --success: #10b981;
+            --danger: #ef4444;
+            --border: #e2e8f0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container { max-width: 1000px; margin: 0 auto; }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 20px;
+            border-bottom: 2px solid var(--border);
+            margin-bottom: 20px;
+        }
+
+        h1 { margin: 0; color: var(--primary); font-size: 28px; }
+        h2 { font-size: 18px; color: var(--text-main); margin-top: 0; border-bottom: 1px solid var(--border); padding-bottom: 10px;}
+
+        /* Tab Navigation */
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+        .tab-btn {
+            padding: 10px 20px;
+            background: var(--border);
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            color: var(--text-muted);
+            transition: 0.3s;
+        }
+        .tab-btn.active { background: var(--primary); color: white; }
+        .tab-content { display: none; background: var(--card-bg); padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+        .tab-content.active { display: block; }
+
+        /* Forms & Inputs */
+        .form-row { display: flex; gap: 15px; margin-bottom: 15px; align-items: flex-end; }
+        .form-group { flex: 1; display: flex; flex-direction: column; }
+        label { font-size: 13px; font-weight: 600; color: var(--text-muted); margin-bottom: 5px; }
+        input, select { padding: 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; }
+        
+        button {
+            padding: 10px 20px; background: var(--primary); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;
+        }
+        button:hover { background: var(--primary-hover); }
+        .btn-success { background: var(--success); width: 100%; margin-top: 15px; font-size: 16px; padding: 15px;}
+        .btn-danger { background: var(--danger); }
+        .btn-outline { background: transparent; border: 2px solid var(--primary); color: var(--primary); }
+
+        /* Tables & Lists */
+        table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid var(--border); }
+        th { background: #f1f5f9; color: var(--text-muted); }
+        .balance-high { font-weight: bold; color: #d97706; }
+
+        /* Attendance List */
+        .attendance-row {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 12px; border-bottom: 1px solid var(--border);
+        }
+        .attendance-row:hover { background: #f8fafc; }
+        .checkbox-wrap { display: flex; align-items: center; gap: 10px; width: 40%; font-weight: 600;}
+        .hours-wrap { display: flex; align-items: center; gap: 10px; }
+        .hours-wrap input { width: 80px; text-align: center; }
+        input[type="checkbox"] { width: 20px; height: 20px; cursor: pointer; }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <div>
+            <h1>Joginder & Sons 🏗️</h1>
+            <p style="margin: 5px 0 0; color: var(--text-muted);">WageTracker Pro - Live Cloud Version</p>
+        </div>
+        <button class="btn-outline" onclick="exportCSV()">Download Backup CSV</button>
+    </header>
+
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab(event, 'ledger')">📊 Master Ledger</button>
+        <button class="tab-btn" onclick="switchTab(event, 'attendance')">✅ Batch Attendance</button>
+        <button class="tab-btn" onclick="switchTab(event, 'manage')">⚙️ Manage Crew</button>
+    </div>
+
+    <div id="ledger" class="tab-content active">
+        <h2>Financial Overview</h2>
+        <div style="overflow-x: auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Worker Name</th>
+                        <th>Daily Rate</th>
+                        <th>OT Hrs</th>
+                        <th>Earned</th>
+                        <th>Paid Out</th>
+                        <th>Unpaid Balance (Owed)</th>
+                    </tr>
+                </thead>
+                <tbody id="ledgerBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="attendance" class="tab-content">
+        <h2>Log Today's Shift</h2>
+        <p style="font-size: 13px; color: var(--text-muted); margin-top: -10px;">Check the box if present, and adjust hours if they worked overtime.</p>
+        
+        <div id="attendanceList" style="border: 1px solid var(--border); border-radius: 8px; margin-bottom: 15px;">
+            </div>
+        
+        <button class="btn-success" onclick="submitBatchAttendance()">💾 Save Today's Attendance</button>
+    </div>
+
+    <div id="manage" class="tab-content">
+        <h2>➕ Register New Worker</h2>
+        <div class="form-row">
+            <div class="form-group"><label>Full Name</label><input type="text" id="addName" placeholder="e.g., Suresh"></div>
+            <div class="form-group"><label>Daily Rate (8 hrs) ₹</label><input type="number" id="addRate" placeholder="600"></div>
+            <button onclick="addWorker()" style="margin-bottom: 2px;">Add Worker</button>
+        </div>
+
+        <br>
+        <h2>💸 Process Cash Payout</h2>
+        <div class="form-row">
+            <div class="form-group"><label>Select Worker</label><select id="paySelect"></select></div>
+            <div class="form-group"><label>Amount Paid ₹</label><input type="number" id="payAmount" placeholder="300"></div>
+            <button class="btn-success" style="margin-top: 0; width: auto;" onclick="processPayout()">Record Payout</button>
+        </div>
+
+        <br>
+        <h2 style="color: var(--danger); border-color: #fee2e2;">❌ Fire / Remove Worker</h2>
+        <div class="form-row">
+            <div class="form-group"><label>Select Worker</label><select id="removeSelect"></select></div>
+            <button class="btn-danger" style="margin-bottom: 2px;" onclick="removeWorker()">Delete Data</button>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    // --- Data Management ---
+    let workers = JSON.parse(localStorage.getItem('joginder_workers')) || [];
+
+    function saveData() {
+        localStorage.setItem('joginder_workers', JSON.stringify(workers));
+        refreshUI();
+    }
+
+    // --- Tab Logic ---
+    function switchTab(evt, tabName) {
+        document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        document.getElementById(tabName).classList.add('active');
+        evt.currentTarget.classList.add('active');
+    }
+
+    // --- Core Functions ---
+    function addWorker() {
+        const name = document.getElementById('addName').value.trim();
+        const rate = parseFloat(document.getElementById('addRate').value);
+        if(!name || isNaN(rate) || rate <= 0) return alert("Enter valid name and rate!");
+
+        workers.push({ name, rate, ot_hours: 0, earned: 0, paid: 0, balance: 0 });
+        document.getElementById('addName').value = '';
+        document.getElementById('addRate').value = '';
+        saveData();
+        alert(`${name} added!`);
+    }
+
+    function processPayout() {
+        const idx = document.getElementById('paySelect').value;
+        const amount = parseFloat(document.getElementById('payAmount').value);
+        if(idx === "" || isNaN(amount) || amount <= 0) return alert("Select worker and enter valid amount!");
+
+        workers[idx].balance -= amount;
+        workers[idx].paid += amount;
+        document.getElementById('payAmount').value = '';
+        saveData();
+        alert(`Payout of ₹${amount} recorded for ${workers[idx].name}!`);
+    }
+
+    function removeWorker() {
+        const idx = document.getElementById('removeSelect').value;
+        if(idx === "") return;
+        if(confirm(`Are you sure you want to permanently delete ${workers[idx].name}?`)) {
+            workers.splice(idx, 1);
+            saveData();
+        }
+    }
+
+    function submitBatchAttendance() {
+        if(workers.length === 0) return;
+        let count = 0;
+        
+        workers.forEach((worker, idx) => {
+            const isPresent = document.getElementById(`check_${idx}`).checked;
+            const hours = parseFloat(document.getElementById(`hours_${idx}`).value);
+            
+            if(isPresent && !isNaN(hours) && hours > 0) {
+                const baseRate = worker.rate / 8;
+                const otRate = baseRate * 1.5;
+                let dayPay = 0;
+
+                if(hours <= 8) {
+                    dayPay = hours * baseRate;
+                } else {
+                    dayPay = worker.rate + ((hours - 8) * otRate);
+                    worker.ot_hours += (hours - 8);
+                }
+                
+                worker.earned += dayPay;
+                worker.balance += dayPay;
+                count++;
+            }
+            // Reset UI for next day
+            document.getElementById(`check_${idx}`).checked = true;
+            document.getElementById(`hours_${idx}`).value = 8;
+        });
+
+        saveData();
+        alert(`Success! Logged attendance for ${count} workers.`);
+    }
+
+    // --- UI Rendering ---
+    function refreshUI() {
+        const ledgerBody = document.getElementById('ledgerBody');
+        const attList = document.getElementById('attendanceList');
+        const paySelect = document.getElementById('paySelect');
+        const removeSelect = document.getElementById('removeSelect');
+
+        ledgerBody.innerHTML = '';
+        attList.innerHTML = '';
+        paySelect.innerHTML = '<option value="">-- Select --</option>';
+        removeSelect.innerHTML = '<option value="">-- Select --</option>';
+
+        if(workers.length === 0) {
+            ledgerBody.innerHTML = '<tr><td colspan="6" style="text-align:center;">No workers added yet.</td></tr>';
+            attList.innerHTML = '<div style="padding:15px; text-align:center;">No crew members available.</div>';
+            return;
+        }
+
+        workers.forEach((w, i) => {
+            // Render Ledger
+            ledgerBody.innerHTML += `
+                <tr>
+                    <td><strong>${w.name}</strong></td>
+                    <td>₹${w.rate}</td>
+                    <td>${w.ot_hours.toFixed(1)}</td>
+                    <td>₹${Math.round(w.earned)}</td>
+                    <td>₹${Math.round(w.paid)}</td>
+                    <td class="balance-high">₹${Math.round(w.balance)}</td>
+                </tr>`;
+
+            // Render Attendance Row
+            attList.innerHTML += `
+                <div class="attendance-row">
+                    <div class="checkbox-wrap">
+                        <input type="checkbox" id="check_${i}" checked>
+                        <label for="check_${i}" style="margin:0; font-size:15px; color:#1e293b;">${w.name}</label>
+                    </div>
+                    <div class="hours-wrap">
+                        <label style="margin:0;">Hours:</label>
+                        <input type="number" id="hours_${i}" value="8" min="0" step="0.5">
+                    </div>
+                </div>`;
+
+            // Populate Dropdowns
+            paySelect.innerHTML += `<option value="${i}">${w.name} (Owed: ₹${Math.round(w.balance)})</option>`;
+            removeSelect.innerHTML += `<option value="${i}">${w.name}</option>`;
+        });
+    }
+
+    function exportCSV() {
+        let csv = "Name,Daily Rate,OT Hours,Earned,Paid,Balance\n";
+        workers.forEach(w => {
+            csv += `"${w.name}",${w.rate},${w.ot_hours},${w.earned},${w.paid},${w.balance}\n`;
+        });
+        const link = document.createElement("a");
+        link.href = encodeURI("data:text/csv;charset=utf-8," + csv);
+        link.download = `JoginderSons_Ledger_${new Date().toISOString().slice(0,10)}.csv`;
+        link.click();
+    }
+
+    window.onload = refreshUI;
+</script>
+</body>
+</html>
