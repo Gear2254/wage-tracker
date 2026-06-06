@@ -40,7 +40,7 @@
         h2 { font-size: 18px; color: var(--text-main); margin-top: 0; border-bottom: 1px solid var(--border); padding-bottom: 10px;}
 
         /* Tab Navigation */
-        .tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
         .tab-btn {
             padding: 10px 20px;
             background: var(--border);
@@ -103,11 +103,13 @@
     <div class="tabs">
         <button class="tab-btn active" onclick="switchTab(event, 'ledger')">📊 Master Ledger</button>
         <button class="tab-btn" onclick="switchTab(event, 'attendance')">✅ Batch Attendance</button>
+        <button class="tab-btn" onclick="switchTab(event, 'history')">📅 Monthly Records</button>
         <button class="tab-btn" onclick="switchTab(event, 'manage')">⚙️ Manage Crew</button>
     </div>
 
+    <!-- TAB 1: LEDGER -->
     <div id="ledger" class="tab-content active">
-        <h2>Financial Overview</h2>
+        <h2>Financial Overview (Current Month)</h2>
         <div style="overflow-x: auto;">
             <table>
                 <thead>
@@ -115,8 +117,8 @@
                         <th>Worker Name</th>
                         <th>Daily Rate</th>
                         <th>OT Hrs</th>
-                        <th>Earned</th>
-                        <th>Paid Out</th>
+                        <th>Earned This Month</th>
+                        <th>Paid This Month</th>
                         <th>Unpaid Balance (Owed)</th>
                         <th>Last Payout</th>
                     </tr>
@@ -126,17 +128,50 @@
         </div>
     </div>
 
+    <!-- TAB 2: ATTENDANCE -->
     <div id="attendance" class="tab-content">
         <h2>Log Today's Shift</h2>
         <p style="font-size: 13px; color: var(--text-muted); margin-top: -10px;">Check the box if present, and adjust hours if they worked overtime.</p>
         
         <div id="attendanceList" style="border: 1px solid var(--border); border-radius: 8px; margin-bottom: 15px;">
-            </div>
+            <!-- Generated via JS -->
+        </div>
         
         <button class="btn-success" onclick="submitBatchAttendance()">💾 Save Today's Attendance</button>
     </div>
 
+    <!-- TAB 3: MONTHLY HISTORY -->
+    <div id="history" class="tab-content">
+        <h2>Archived Monthly Records</h2>
+        <p style="font-size: 13px; color: var(--text-muted); margin-top: -10px;">View past earnings and payouts. Data rolls over automatically on the 1st of every month.</p>
+        
+        <div class="form-row">
+            <div class="form-group">
+                <label>Select Worker to View History</label>
+                <select id="historySelect" onchange="renderHistory()"></select>
+            </div>
+        </div>
+
+        <div style="overflow-x: auto; margin-top: 15px;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Month / Year</th>
+                        <th>Total OT Hours</th>
+                        <th>Total Earned</th>
+                        <th>Total Paid Out</th>
+                    </tr>
+                </thead>
+                <tbody id="historyBody">
+                    <tr><td colspan="4" style="text-align:center;">Select a worker to view their past records.</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- TAB 4: MANAGE -->
     <div id="manage" class="tab-content">
+        <!-- Add Worker -->
         <h2>➕ Register New Worker</h2>
         <div class="form-row">
             <div class="form-group"><label>Full Name</label><input type="text" id="addName" placeholder="e.g., Suresh"></div>
@@ -145,6 +180,7 @@
         </div>
 
         <br>
+        <!-- Process Payout -->
         <h2>💸 Process Cash Payout</h2>
         <div class="form-row">
             <div class="form-group"><label>Select Worker</label><select id="paySelect"></select></div>
@@ -153,6 +189,7 @@
         </div>
 
         <br>
+        <!-- Remove Worker -->
         <h2 style="color: var(--danger); border-color: #fee2e2;">❌ Fire / Remove Worker</h2>
         <div class="form-row">
             <div class="form-group"><label>Select Worker</label><select id="removeSelect"></select></div>
@@ -169,6 +206,50 @@
     function saveData() {
         localStorage.setItem('joginder_workers', JSON.stringify(workers));
         refreshUI();
+        if(document.getElementById('historySelect').value !== "") {
+            renderHistory();
+        }
+    }
+
+    // --- Monthly Rollover Logic ---
+    function checkMonthlyRollover() {
+        const currentMonth = new Date().toISOString().slice(0,7); // Format: "YYYY-MM"
+        let appState = JSON.parse(localStorage.getItem('joginder_state'));
+
+        if (!appState) {
+            // First time running, set the current month
+            appState = { last_reset_month: currentMonth };
+            localStorage.setItem('joginder_state', JSON.stringify(appState));
+        }
+
+        if (appState.last_reset_month !== currentMonth) {
+            // It is a new month! Archive the old data.
+            workers.forEach(w => {
+                if (!w.history) w.history = [];
+                
+                // Only save if they actually earned or were paid something that month
+                if (w.earned > 0 || w.paid > 0) {
+                    w.history.push({
+                        month: appState.last_reset_month,
+                        earned: w.earned,
+                        ot_hours: w.ot_hours,
+                        paid: w.paid
+                    });
+                }
+                
+                // Reset monthly counters (BUT KEEP THE UNPAID BALANCE!)
+                w.earned = 0;
+                w.ot_hours = 0;
+                w.paid = 0;
+            });
+            
+            // Update the state to the new month
+            appState.last_reset_month = currentMonth;
+            localStorage.setItem('joginder_state', JSON.stringify(appState));
+            localStorage.setItem('joginder_workers', JSON.stringify(workers));
+            
+            alert("Happy new month! 📅 Last month's earnings have been archived in the Monthly Records tab. Balances have carried over.");
+        }
     }
 
     // --- Tab Logic ---
@@ -185,8 +266,16 @@
         const rate = parseFloat(document.getElementById('addRate').value);
         if(!name || isNaN(rate) || rate <= 0) return alert("Enter valid name and rate!");
 
-        // Added 'last_paid' tracking field
-        workers.push({ name, rate, ot_hours: 0, earned: 0, paid: 0, balance: 0, last_paid: "Never" });
+        workers.push({ 
+            name, 
+            rate, 
+            ot_hours: 0, 
+            earned: 0, 
+            paid: 0, 
+            balance: 0, 
+            last_paid: "Never",
+            history: [] // Added history array
+        });
         document.getElementById('addName').value = '';
         document.getElementById('addRate').value = '';
         saveData();
@@ -201,7 +290,6 @@
         workers[idx].balance -= amount;
         workers[idx].paid += amount;
         
-        // Grab the exact current date and time
         const now = new Date();
         const timeOptions = { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' };
         workers[idx].last_paid = now.toLocaleString('en-IN', timeOptions);
@@ -254,16 +342,53 @@
     }
 
     // --- UI Rendering ---
+    function renderHistory() {
+        const idx = document.getElementById('historySelect').value;
+        const historyBody = document.getElementById('historyBody');
+        historyBody.innerHTML = '';
+
+        if(idx === "") {
+            historyBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Select a worker to view their past records.</td></tr>';
+            return;
+        }
+
+        const w = workers[idx];
+        if(!w.history || w.history.length === 0) {
+            historyBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">No past monthly records found for this worker.</td></tr>';
+            return;
+        }
+
+        // Show newest records first
+        [...w.history].reverse().forEach(record => {
+            // Format YYYY-MM to a nicer string
+            const dateObj = new Date(record.month + "-02"); // Add day to avoid timezone shifting
+            const monthString = dateObj.toLocaleString('default', { month: 'long', year: 'numeric' });
+
+            historyBody.innerHTML += `
+                <tr>
+                    <td><strong>${monthString}</strong></td>
+                    <td>${record.ot_hours.toFixed(1)} hrs</td>
+                    <td class="balance-high">₹${Math.round(record.earned)}</td>
+                    <td>₹${Math.round(record.paid)}</td>
+                </tr>`;
+        });
+    }
+
     function refreshUI() {
         const ledgerBody = document.getElementById('ledgerBody');
         const attList = document.getElementById('attendanceList');
         const paySelect = document.getElementById('paySelect');
         const removeSelect = document.getElementById('removeSelect');
+        const historySelect = document.getElementById('historySelect');
+        
+        // Preserve current history selection if possible
+        const currentHistorySelection = historySelect.value;
 
         ledgerBody.innerHTML = '';
         attList.innerHTML = '';
         paySelect.innerHTML = '<option value="">-- Select --</option>';
         removeSelect.innerHTML = '<option value="">-- Select --</option>';
+        historySelect.innerHTML = '<option value="">-- Select Worker --</option>';
 
         if(workers.length === 0) {
             ledgerBody.innerHTML = '<tr><td colspan="7" style="text-align:center;">No workers added yet.</td></tr>';
@@ -272,7 +397,10 @@
         }
 
         workers.forEach((w, i) => {
-            // Render Ledger with the new Last Payout column
+            // Backward compatibility for older saved data
+            if(!w.history) w.history = [];
+
+            // Render Ledger 
             const lastPaidDisplay = w.last_paid || "Never";
             ledgerBody.innerHTML += `
                 <tr>
@@ -301,11 +429,17 @@
             // Populate Dropdowns
             paySelect.innerHTML += `<option value="${i}">${w.name} (Owed: ₹${Math.round(w.balance)})</option>`;
             removeSelect.innerHTML += `<option value="${i}">${w.name}</option>`;
+            historySelect.innerHTML += `<option value="${i}">${w.name}</option>`;
         });
+
+        // Restore history dropdown state
+        if(currentHistorySelection !== "") {
+            historySelect.value = currentHistorySelection;
+        }
     }
 
     function exportCSV() {
-        let csv = "Name,Daily Rate,OT Hours,Earned,Paid,Balance,Last Payout\n";
+        let csv = "Name,Daily Rate,Current Month OT,Current Month Earned,Current Month Paid,Total Unpaid Balance,Last Payout Date\n";
         workers.forEach(w => {
             const lastPaidExport = w.last_paid || "Never";
             csv += `"${w.name}",${w.rate},${w.ot_hours},${w.earned},${w.paid},${w.balance},"${lastPaidExport}"\n`;
@@ -316,7 +450,11 @@
         link.click();
     }
 
-    window.onload = refreshUI;
+    // Run rollover check, then load UI
+    window.onload = () => {
+        checkMonthlyRollover();
+        refreshUI();
+    };
 </script>
 </body>
 </html>
